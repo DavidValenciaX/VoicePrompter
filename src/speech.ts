@@ -5,6 +5,26 @@ import { updateMicUI, updateHighlight, scrollToCurrent, advancePastSkipped, rest
 // Track the last matched word to prevent matching the same word twice in a row
 let lastMatchedWord = '';
 
+type MatchCandidate = {
+    targetIndex: number;
+    advanceWords: number;
+    matchCount: number;
+    strongCount: number;
+    signature: string;
+};
+
+const MAX_SEQUENCE_MATCH = 3;
+const MAX_EFFECTIVE_LOOKAHEAD = 3;
+const SPOKEN_CONTEXT_WORDS = 6;
+const WEAK_WORDS = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'de', 'del', 'des',
+    'do', 'does', 'did', 'el', 'en', 'era', 'es', 'et', 'for', 'from', 'go', 'in', 'is',
+    'it', 'la', 'las', 'le', 'les', 'lo', 'los', 'me', 'mi', 'of', 'on', 'or', 'para',
+    'por', 'que', 'se', 'son', 'su', 'te', 'the', 'to', 'tu', 'un', 'una', 'unas', 'une',
+    'uno', 'unos', 'was', 'were', 'with', 'y'
+]);
+let pendingMatch: { signature: string; hits: number } | null = null;
+
 // Track which result indices we already processed for commands
 // to prevent re-firing when the recognition engine revisits finalized results
 
@@ -19,6 +39,148 @@ let gotResultOnFirstStart = false;
 
 function showBrowserWarning() {
     els.browserWarning.classList.remove('hidden');
+}
+
+function normalizeToken(token: string): string {
+    return token.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+}
+
+function extractNormalizedTokens(text: string): string[] {
+    return text
+        .split(/\s+/)
+        .map(normalizeToken)
+        .filter(token => token.length > 0);
+}
+
+function isWeakToken(token: string): boolean {
+    return token.length <= 2 || WEAK_WORDS.has(token);
+}
+
+function clearPendingMatch(): void {
+    pendingMatch = null;
+}
+
+function getSequenceMatch(spokenTokens: string[], scriptTokens: string[]): { matchCount: number; strongCount: number } | null {
+    const maxMatch = Math.min(MAX_SEQUENCE_MATCH, spokenTokens.length, scriptTokens.length);
+    if (maxMatch === 0) return null;
+
+    let best: { matchCount: number; strongCount: number } | null = null;
+    for (const tailOffset of [0, 1]) {
+        const availableSpoken = spokenTokens.length - tailOffset;
+        if (availableSpoken <= 0) continue;
+
+        const limit = Math.min(maxMatch, availableSpoken);
+        for (let size = limit; size >= 1; size--) {
+            const spokenSlice = spokenTokens.slice(availableSpoken - size, availableSpoken);
+            const scriptSlice = scriptTokens.slice(0, size);
+
+            let matches = true;
+            for (let i = 0; i < size; i++) {
+                if (spokenSlice[i] !== scriptSlice[i]) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (!matches) continue;
+
+            const strongCount = scriptSlice.filter(token => !isWeakToken(token)).length;
+            const candidate = { matchCount: size, strongCount };
+            if (
+                !best ||
+                candidate.matchCount > best.matchCount ||
+                (candidate.matchCount === best.matchCount && candidate.strongCount > best.strongCount)
+            ) {
+                best = candidate;
+            }
+        }
+    }
+
+    return best;
+}
+
+function collectScriptTokens(startIndex: number): { tokens: string[]; lastIndex: number } {
+    const tokens: string[] = [];
+    let lastIndex = startIndex;
+
+    for (let i = startIndex; i < state.scriptWords.length && tokens.length < MAX_SEQUENCE_MATCH; i++) {
+        const scriptWord = state.scriptWords[i];
+        if (scriptWord.skip || !scriptWord.clean) continue;
+        tokens.push(scriptWord.clean);
+        lastIndex = i;
+    }
+
+    return { tokens, lastIndex };
+}
+
+function findBestMatchCandidate(spokenTokens: string[]): MatchCandidate | null {
+    const effectiveLookahead = Math.min(state.config.lookaheadWords, MAX_EFFECTIVE_LOOKAHEAD);
+    let candidate: MatchCandidate | null = null;
+    let scriptPtr = state.currentIndex;
+    let validWordsChecked = 0;
+
+    while (scriptPtr < state.scriptWords.length && validWordsChecked < effectiveLookahead) {
+        const scriptWord = state.scriptWords[scriptPtr];
+        if (scriptWord.skip || !scriptWord.clean) {
+            scriptPtr++;
+            continue;
+        }
+
+        const { tokens, lastIndex } = collectScriptTokens(scriptPtr);
+        const sequenceMatch = getSequenceMatch(spokenTokens, tokens);
+
+        if (sequenceMatch) {
+            const nextCandidate: MatchCandidate = {
+                targetIndex: lastIndex,
+                advanceWords: validWordsChecked + 1,
+                matchCount: sequenceMatch.matchCount,
+                strongCount: sequenceMatch.strongCount,
+                signature: `${lastIndex}:${sequenceMatch.matchCount}`
+            };
+
+            if (
+                !candidate ||
+                nextCandidate.matchCount > candidate.matchCount ||
+                (nextCandidate.matchCount === candidate.matchCount && nextCandidate.strongCount > candidate.strongCount) ||
+                (
+                    nextCandidate.matchCount === candidate.matchCount &&
+                    nextCandidate.strongCount === candidate.strongCount &&
+                    nextCandidate.advanceWords < candidate.advanceWords
+                )
+            ) {
+                candidate = nextCandidate;
+            }
+        }
+
+        scriptPtr++;
+        validWordsChecked++;
+    }
+
+    return candidate;
+}
+
+function shouldApplyImmediately(candidate: MatchCandidate, hasFinalResult: boolean): boolean {
+    if (candidate.matchCount >= 3 && candidate.strongCount >= 2) {
+        return true;
+    }
+
+    if (candidate.advanceWords === 1) {
+        if (candidate.matchCount >= 2 && candidate.strongCount >= 1) {
+            return true;
+        }
+        return hasFinalResult && candidate.strongCount >= 1;
+    }
+
+    return hasFinalResult && candidate.matchCount >= 2 && candidate.strongCount >= 1;
+}
+
+function applyMatch(candidate: MatchCandidate): void {
+    clearPendingMatch();
+    lastMatchedWord = state.scriptWords[candidate.targetIndex]?.clean ?? '';
+    state.currentIndex = candidate.targetIndex + 1;
+    advancePastSkipped();
+    updateHighlight();
+    scrollToCurrent();
 }
 
 export function initSpeech(): void {
@@ -42,8 +204,10 @@ export function initSpeech(): void {
         }
 
         let transcript = '';
+        let hasFinalResult = false;
         for (let i = event.resultIndex; i < event.results.length; i++) {
             transcript += event.results[i][0].transcript;
+            hasFinalResult = hasFinalResult || Boolean(event.results[i].isFinal);
         }
 
         // --- Voice Commands (Mac-Style) ---
@@ -89,6 +253,7 @@ export function initSpeech(): void {
                                 navigateParagraphs('back', 1);
                             }
                             lastMatchedWord = '';
+                            clearPendingMatch();
                             return; // Stop processing to prevent the command from being read as script text
                         }
                     } else {
@@ -102,9 +267,10 @@ export function initSpeech(): void {
             }
         }
 
-        // --- Word matching: uses all results (interim + final) for responsiveness ---
-        const spokenWords = transcript.trim().toLowerCase().split(/\s+/);
-        matchWords(spokenWords.slice(-5));
+        // Use a short ordered token window instead of a bag-of-words match.
+        // That makes repeated/common words much less likely to jump ahead.
+        const spokenWords = extractNormalizedTokens(transcript).slice(-SPOKEN_CONTEXT_WORDS);
+        matchWords(spokenWords, hasFinalResult);
     };
 
     state.recognition.onerror = (e: any) => {
@@ -172,6 +338,7 @@ export function startListening(): void {
     if (!state.recognition) return;
     state.isListening = true;
     lastMatchedWord = '';
+    clearPendingMatch();
 
     speechBlocked = false;
     try {
@@ -188,6 +355,7 @@ export function stopListening(): void {
     if (!state.recognition) return;
     state.isListening = false;
     lastMatchedWord = '';
+    clearPendingMatch();
 
     try {
         state.recognition.stop();
@@ -197,55 +365,37 @@ export function stopListening(): void {
     }
 }
 
-function matchWords(spokenWords: string[]) {
+function matchWords(spokenWords: string[], hasFinalResult: boolean) {
     if (state.currentIndex >= state.scriptWords.length) return;
     if (spokenWords.length === 0) return;
+    const candidate = findBestMatchCandidate(spokenWords);
+    if (!candidate) {
+        clearPendingMatch();
+        return;
+    }
 
-    const LOOKAHEAD = state.config.lookaheadWords;
+    if (candidate.matchCount === 1 && candidate.strongCount === 0 && candidate.advanceWords > 1) {
+        clearPendingMatch();
+        return;
+    }
 
-    // Create a Set of cleaned spoken words for fast lookup
-    const spokenSet = new Set(
-        spokenWords
-            .map(w => w.replace(/[^\p{L}\p{N}]/gu, "").toLowerCase())
-            .filter(w => w.length > 0)
-    );
+    if (candidate.matchCount === 1 && state.scriptWords[candidate.targetIndex]?.clean === lastMatchedWord && !hasFinalResult) {
+        clearPendingMatch();
+        return;
+    }
 
-    if (spokenSet.size === 0) return;
+    if (shouldApplyImmediately(candidate, hasFinalResult)) {
+        applyMatch(candidate);
+        return;
+    }
 
-    // Iterate through SCRIPT words from nearest to farthest
-    // This ensures we always advance to the nearest matching word
-    let scriptPtr = state.currentIndex;
-    let validWordsChecked = 0;
+    if (pendingMatch?.signature === candidate.signature) {
+        pendingMatch.hits += 1;
+    } else {
+        pendingMatch = { signature: candidate.signature, hits: 1 };
+    }
 
-    while (scriptPtr < state.scriptWords.length && validWordsChecked < LOOKAHEAD) {
-        const scriptWordObj = state.scriptWords[scriptPtr];
-
-        if (scriptWordObj.skip) {
-            scriptPtr++;
-            continue;
-        }
-
-        // Check if this script word was spoken
-        if (spokenSet.has(scriptWordObj.clean)) {
-            // Prevent matching the same word twice in a row (prevents double-jump)
-            // But allow it if it's at the current position (position 0 in lookahead)
-            if (scriptWordObj.clean === lastMatchedWord && validWordsChecked > 0) {
-                // Same word as last match, and not at current position - skip it
-                scriptPtr++;
-                validWordsChecked++;
-                continue;
-            }
-
-            lastMatchedWord = scriptWordObj.clean;
-            state.currentIndex = scriptPtr + 1;
-            advancePastSkipped();
-            updateHighlight();
-            scrollToCurrent();
-            return;
-        }
-
-        scriptPtr++;
-        validWordsChecked++;
+    if (pendingMatch.hits >= 2) {
+        applyMatch(candidate);
     }
 }
-
