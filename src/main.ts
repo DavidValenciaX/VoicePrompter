@@ -19,6 +19,17 @@ type DocumentPictureInPictureApi = {
 
 interface LangItem { id: string; name: string }
 
+function revealStartupOverlay(): void {
+    const revealApp = (window as Window & { revealApp?: () => void }).revealApp;
+    if (typeof revealApp === 'function') {
+        revealApp();
+        return;
+    }
+
+    document.documentElement.classList.add('app-ready');
+    document.getElementById('startupOverlay')?.remove();
+}
+
 const AUTO_LANGS: LangItem[] = [
     { id: 'en-US', name: 'English' },
     { id: 'es-ES', name: 'Spanish' },
@@ -413,6 +424,9 @@ function applyMirrorState(): void {
 
 function prepareExternalWindowDocument(targetWindow: Window): void {
     const pipDocument = targetWindow.document;
+    // The startup overlay CSS from index.html is copied into the PiP window.
+    // Mark that document as ready immediately so it does not hide all content.
+    pipDocument.documentElement.classList.add('app-ready');
     pipDocument.documentElement.style.width = '100%';
     pipDocument.documentElement.style.height = '100%';
     pipDocument.documentElement.style.setProperty('--base-color', state.config.textColor);
@@ -1309,14 +1323,18 @@ els.soundSensitivityInput.addEventListener('input', (e) => {
 });
 
 function boot(): void {
-    updateScrollingUI();
-    initializeUI();
-    pinDockToVisualViewport();
+    try {
+        updateScrollingUI();
+        initializeUI();
+        pinDockToVisualViewport();
 
-    // Fallback for async localStorage injection (e.g. WKWebView)
-    setTimeout(() => {
-        renderHistoryList(getHistory(), loadScript);
-    }, 500);
+        // Fallback for async localStorage injection (e.g. WKWebView)
+        setTimeout(() => {
+            renderHistoryList(getHistory(), loadScript);
+        }, 500);
+    } finally {
+        revealStartupOverlay();
+    }
 }
 
 // Run boot as soon as the DOM is ready. We must NOT rely solely on the

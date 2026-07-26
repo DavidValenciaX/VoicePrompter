@@ -60,6 +60,66 @@
         rel="stylesheet">
     <link href="https://fonts.cdnfonts.com/css/opendyslexic" rel="stylesheet">
 
+    <style>
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: #000;
+        }
+
+        html:not(.app-ready) {
+            overflow: hidden;
+        }
+
+        body> :not(#startupOverlay) {
+            visibility: hidden;
+        }
+
+        html.app-ready body> :not(#startupOverlay) {
+            visibility: visible;
+        }
+
+        #startupOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            background: #000;
+            opacity: 1;
+            transition: opacity 220ms ease;
+        }
+
+        html.app-ready #startupOverlay {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #startupOverlay {
+                transition: none;
+            }
+        }
+    </style>
+
+    <script>
+        (() => {
+            const revealApp = () => {
+                document.documentElement.classList.add('app-ready');
+
+                const overlay = document.getElementById('startupOverlay');
+                if (!overlay) return;
+
+                overlay.setAttribute('aria-hidden', 'true');
+                const removeOverlay = () => overlay.remove();
+                overlay.addEventListener('transitionend', removeOverlay, { once: true });
+                window.setTimeout(removeOverlay, 500);
+            };
+
+            window.revealApp = revealApp;
+            window.setTimeout(revealApp, 4000);
+        })();
+    </script>
+
     <!-- Umami Analytics -->
     <script defer src="https://reactive-analytics.up.railway.app/script.js"
         data-website-id="eee38a2c-9b72-4937-9ee4-37827bae546c"></script>
@@ -71,6 +131,7 @@
 </head>
 
 <body id="appBody" class="bg-black text-white font-mono selection:bg-blue-500 selection:text-white">
+    <div id="startupOverlay" aria-hidden="false"></div>
 
     <!-- Browser Warning -->
     <div id="browserWarning"
