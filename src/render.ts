@@ -2,30 +2,37 @@ import { els } from './elements';
 import { state } from './state';
 import { HistoryItem } from './types';
 
-export function renderScript(): void {
-    els.scriptContent.innerHTML = '';
+function getWordElements(wordObj: typeof state.scriptWords[number]): HTMLElement[] {
+    return [wordObj.element, wordObj.floatingElement].filter(Boolean) as HTMLElement[];
+}
+
+function renderScriptIntoContainer(
+    container: HTMLElement,
+    targetKey: 'element' | 'floatingElement',
+    idPrefix: string
+): void {
+    container.innerHTML = '';
+
     state.scriptWords.forEach((obj, index) => {
         const span = document.createElement('span');
         span.textContent = obj.word;
-        span.id = `word-${index}`;
+        span.id = `${idPrefix}-${index}`;
 
-        // Apply Classes
-        let classList = "script-word transition-opacity duration-300 ";
+        let classList = 'script-word transition-opacity duration-300 ';
 
         if (obj.isStop) {
-            classList += "stop-marker ";
+            classList += 'stop-marker ';
         } else if (obj.isBreak) {
-            classList += "line-break ";
+            classList += 'line-break ';
             span.style.display = 'block';
             span.style.width = '100%';
         } else if (obj.skip) {
-            classList += "skipped-word ";
+            classList += 'skipped-word ';
         } else {
-            classList += "text-future ";
+            classList += 'text-future ';
         }
         span.className = classList;
 
-        // TAP TO ACTIVATE Logic
         span.onclick = () => {
             if (!obj.skip) {
                 state.currentIndex = index;
@@ -34,16 +41,81 @@ export function renderScript(): void {
             }
         };
 
-        els.scriptContent.appendChild(span);
-        obj.element = span;
+        container.appendChild(span);
+        obj[targetKey] = span;
+    });
+}
+
+function applyStopMarkerVisibility(): void {
+    [els.scriptContent, els.floatingScriptContent].forEach((container) => {
+        container.classList.toggle('show-stops', state.config.showStopIcon);
+    });
+}
+
+function getFontStack(): string {
+    const fontMap: Record<string, string> = {
+        mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif',
+        serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+        comicSans: '"Comic Sans MS", "Chalkboard SE", "Trebuchet MS", cursive',
+        openDyslexic: '"OpenDyslexic", cursive'
+    };
+
+    return fontMap[state.config.fontFamily] ?? fontMap.mono;
+}
+
+function syncScriptViewportSpacing(): void {
+    const positionRatio = state.config.activeLinePosition / 100;
+    const syncSpacing = (
+        scrollContainer: HTMLElement,
+        topSpacer: HTMLElement,
+        scriptContent: HTMLElement
+    ) => {
+        const containerHeight = scrollContainer.clientHeight;
+        if (!containerHeight) return;
+
+        topSpacer.style.height = `${Math.round(containerHeight * positionRatio)}px`;
+        scriptContent.style.paddingBottom = `${Math.round(containerHeight * (1 - positionRatio) + 48)}px`;
+    };
+
+    syncSpacing(els.scrollContainer, els.topSpacer, els.scriptContent);
+    syncSpacing(els.floatingScrollContainer, els.floatingTopSpacer, els.floatingScriptContent);
+}
+
+export function setControlDocksOpacity(opacity: number | null): void {
+    const value = opacity === null ? '' : opacity.toString();
+    [els.mainControlsDock, els.floatingControlsDock].forEach((dock) => {
+        dock.style.opacity = value;
+    });
+}
+
+export function updateFloatingWindowVisibility(): void {
+    const isPrompterVisible = !els.prompterContainer.classList.contains('hidden');
+    const enabled = state.config.floatingWindowEnabled && isPrompterVisible;
+
+    els.floatingWindowToggle.checked = state.config.floatingWindowEnabled;
+    els.floatingPrompterWindow.classList.toggle('hidden', !enabled);
+
+    const hideMainScript = enabled && !state.isVideoMode;
+    els.scrollWrapper.style.visibility = hideMainScript ? 'hidden' : '';
+    els.scrollWrapper.style.pointerEvents = hideMainScript ? 'none' : '';
+
+    els.mainControlsDock.style.visibility = enabled ? 'hidden' : '';
+    els.mainControlsDock.style.pointerEvents = enabled ? 'none' : '';
+
+    setControlDocksOpacity(state.isListening || state.isRecording ? state.config.dockOpacity / 100 : null);
+    syncScriptViewportSpacing();
+}
+
+export function renderScript(): void {
+    state.scriptWords.forEach((obj) => {
+        obj.element = null;
+        obj.floatingElement = null;
     });
 
-    // Apply current visibility setting
-    if (state.config.showStopIcon) {
-        els.scriptContent.classList.add('show-stops');
-    } else {
-        els.scriptContent.classList.remove('show-stops');
-    }
+    renderScriptIntoContainer(els.scriptContent, 'element', 'word');
+    renderScriptIntoContainer(els.floatingScriptContent, 'floatingElement', 'floating-word');
+    applyStopMarkerVisibility();
 
     els.setupScreen.classList.add('hidden');
     els.prompterContainer.classList.remove('hidden');
@@ -58,6 +130,8 @@ export function renderScript(): void {
     state.currentIndex = 0;
     advancePastSkipped();
     updateHighlight();
+    updateFloatingWindowVisibility();
+    syncScriptViewportSpacing();
     
     setTimeout(() => {
         scrollToCurrent();
@@ -69,23 +143,20 @@ export function updateHighlight(): void {
         if (obj.skip) return;
 
         if (idx < state.currentIndex) {
-            // Past words
-            if (obj.element) {
-                obj.element.classList.remove('current-word', 'text-future');
-                obj.element.classList.add('text-neutral-500'); // Dimmed
-            }
+            getWordElements(obj).forEach((el) => {
+                el.classList.remove('current-word', 'text-future');
+                el.classList.add('text-neutral-500');
+            });
         } else if (idx === state.currentIndex) {
-            // Current word
-            if (obj.element) {
-                obj.element.classList.remove('text-neutral-500', 'text-future');
-                obj.element.classList.add('current-word');
-            }
+            getWordElements(obj).forEach((el) => {
+                el.classList.remove('text-neutral-500', 'text-future');
+                el.classList.add('current-word');
+            });
         } else {
-            // Future words
-            if (obj.element) {
-                obj.element.classList.remove('current-word', 'text-neutral-500');
-                obj.element.classList.add('text-future');
-            }
+            getWordElements(obj).forEach((el) => {
+                el.classList.remove('current-word', 'text-neutral-500');
+                el.classList.add('text-future');
+            });
         }
     });
 }
@@ -93,21 +164,31 @@ export function updateHighlight(): void {
 export function scrollToCurrent(): void {
     if (state.currentIndex < state.scriptWords.length) {
         const currentWordObj = state.scriptWords[state.currentIndex];
-        if (currentWordObj && currentWordObj.element) {
-            const containerHeight = els.scrollContainer.clientHeight;
-            // Position based on user setting (percentage from top)
-            const positionRatio = state.config.activeLinePosition / 100;
-            const targetPosition = currentWordObj.element.offsetTop - (containerHeight * positionRatio);
+        if (!currentWordObj) return;
+
+        syncScriptViewportSpacing();
+
+        const positionRatio = state.config.activeLinePosition / 100;
+        const scrollTargets: Array<[HTMLElement, HTMLElement | null]> = [
+            [els.scrollContainer, currentWordObj.element],
+            [els.floatingScrollContainer, currentWordObj.floatingElement]
+        ];
+
+        scrollTargets.forEach(([container, targetEl]) => {
+            if (!targetEl || container.clientHeight === 0) return;
+
+            const containerHeight = container.clientHeight;
+            const targetPosition = targetEl.offsetTop - (containerHeight * positionRatio);
 
             if (state.config.smoothAnimations) {
-                smoothScrollTo(els.scrollContainer, targetPosition, 600);
+                smoothScrollTo(container, targetPosition, 600);
             } else {
-                els.scrollContainer.scrollTo({
+                container.scrollTo({
                     top: targetPosition,
                     behavior: 'auto'
                 });
             }
-        }
+        });
     }
 }
 
@@ -221,80 +302,83 @@ export function applySettings(): void {
     els.appBody.style.backgroundColor = state.config.bgColor;
     els.appBody.style.color = state.config.textColor;
     els.appBody.style.setProperty('--base-color', state.config.textColor);
+    els.floatingPrompterWindow.ownerDocument.documentElement.style.setProperty('--base-color', state.config.textColor);
+    els.floatingPrompterWindow.ownerDocument.body.style.backgroundColor = state.config.bgColor;
+    els.floatingPrompterWindow.ownerDocument.body.style.color = state.config.textColor;
 
-    // Apply background to prompter container for theme support
     els.prompterContainer.style.backgroundColor = state.config.bgColor;
+    els.floatingPrompterWindow.style.backgroundColor = state.config.bgColor;
+    els.floatingPrompterWindow.style.color = state.config.textColor;
+
     if (!(state.isVideoMode && state.videoLayoutMode === 'overlay')) {
         els.scrollContainer.style.backgroundColor = state.config.bgColor;
     }
+    els.floatingScrollContainer.style.backgroundColor = state.config.bgColor;
+    els.floatingScrollContainer.style.color = state.config.textColor;
 
-    els.scriptContent.style.setProperty('--paragraph-spacing', `${state.config.paragraphSpacing}em`);
-    els.scriptContent.style.lineHeight = `${state.config.lineHeight}`;
-    els.scriptContent.style.textAlign = state.config.textAlign;
-    els.scriptContent.style.direction = state.config.textDirection;
+    const fontStack = getFontStack();
+    [els.scriptContent, els.floatingScriptContent].forEach((container) => {
+        container.style.setProperty('--paragraph-spacing', `${state.config.paragraphSpacing}em`);
+        container.style.lineHeight = `${state.config.lineHeight}`;
+        container.style.textAlign = state.config.textAlign;
+        container.style.direction = state.config.textDirection;
+        container.style.fontFamily = fontStack;
+        container.style.fontSize = `${state.config.fontSize}px`;
+        container.style.paddingLeft = `${state.config.margin}%`;
+        container.style.paddingRight = `${state.config.margin}%`;
+        container.classList.toggle('smooth-animations', state.config.smoothAnimations);
+        container.classList.toggle('highlight-active-word', state.config.highlightActiveWord);
+    });
 
-    if (state.config.smoothAnimations) {
-        els.scriptContent.classList.add('smooth-animations');
+    applyStopMarkerVisibility();
+    syncScriptViewportSpacing();
+    updateFloatingWindowVisibility();
+}
+
+function updateMicButtonVisual(button: HTMLElement, icon: HTMLElement, isListening: boolean): void {
+    const pathEl = icon.querySelector('path');
+    const isVoice = state.config.scrollingMode === 'voice';
+
+    if (isListening) {
+        button.classList.remove('bg-neutral-800', 'hover:bg-neutral-700');
+        button.classList.add('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
     } else {
-        els.scriptContent.classList.remove('smooth-animations');
+        button.classList.add('bg-neutral-800', 'hover:bg-neutral-700');
+        button.classList.remove('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
     }
 
-    if (state.config.highlightActiveWord) {
-        els.scriptContent.classList.add('highlight-active-word');
-    } else {
-        els.scriptContent.classList.remove('highlight-active-word');
-    }
+    if (!pathEl) return;
 
-    // Apply font family to script content
-    const fontMap: Record<string, string> = {
-        mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif',
-        serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-        comicSans: '"Comic Sans MS", "Chalkboard SE", "Trebuchet MS", cursive',
-        openDyslexic: '"OpenDyslexic", cursive'
-    };
-    const fontStack = fontMap[state.config.fontFamily] ?? fontMap['mono'];
-    els.scriptContent.style.fontFamily = fontStack;
+    if (isListening) {
+        if (isVoice) {
+            pathEl.setAttribute('d', 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z');
+        } else {
+            pathEl.setAttribute('d', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
+        }
+    } else if (isVoice) {
+        pathEl.setAttribute('d', 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z');
+    } else {
+        pathEl.setAttribute('d', 'M8 5v14l11-7z');
+    }
 }
 
 export function updateMicUI(isListening: boolean): void {
     const isVoice = state.config.scrollingMode === 'voice';
-    const pathEl = els.micButton.querySelector('path');
     
+    updateMicButtonVisual(els.micButton, els.micIcon, isListening);
+    updateMicButtonVisual(els.floatingMicButton, els.floatingMicIcon, isListening);
+
+    els.micIcon.classList.add('text-white');
+    els.floatingMicIcon.classList.add('text-white');
+
     if (isListening) {
-        els.micButton.classList.remove('bg-neutral-800', 'hover:bg-neutral-700');
-        els.micButton.classList.add('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
-        els.micIcon.classList.add('text-white');
-        
-        els.statusIndicator.textContent = isVoice ? "Listening..." : "Scrolling...";
+        els.statusIndicator.textContent = isVoice ? 'Listening...' : 'Scrolling...';
         els.statusIndicator.classList.remove('text-neutral-500');
         els.statusIndicator.classList.add('text-red-500');
-        
-        if (pathEl) {
-            if (isVoice) {
-                pathEl.setAttribute('d', 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z');
-            } else {
-                // Pause icon
-                pathEl.setAttribute('d', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
-            }
-        }
     } else {
-        els.micButton.classList.add('bg-neutral-800', 'hover:bg-neutral-700');
-        els.micButton.classList.remove('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
-        els.micIcon.classList.remove('text-white');
-        
-        els.statusIndicator.textContent = isVoice ? "Tap mic to start" : "Tap play to start";
+        els.statusIndicator.textContent = isVoice ? 'Tap mic to start' : 'Tap play to start';
         els.statusIndicator.classList.add('text-neutral-500');
         els.statusIndicator.classList.remove('text-red-500');
-        
-        if (pathEl) {
-            if (isVoice) {
-                pathEl.setAttribute('d', 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z');
-            } else {
-                // Play icon
-                pathEl.setAttribute('d', 'M8 5v14l11-7z');
-            }
-        }
     }
 }
 

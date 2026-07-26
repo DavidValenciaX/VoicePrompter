@@ -1,6 +1,6 @@
 import { state } from './state';
 import { els } from './elements';
-import { scrollToCurrent } from './render';
+import { scrollToCurrent, setControlDocksOpacity, updateFloatingWindowVisibility } from './render';
 
 // Mirror the preview only for the front ('user') camera, like a selfie view.
 // The rear camera should show a true (non-mirrored) image.
@@ -54,6 +54,7 @@ export async function enterVideoMode(): Promise<void> {
 
         // Apply split layout by default
         applyVideoLayout();
+        updateFloatingWindowVisibility();
 
         setTimeout(() => {
             scrollToCurrent();
@@ -139,8 +140,8 @@ export function exitVideoMode(): void {
     els.videoRecordBtn.classList.remove('hidden');
     els.videoStopBtn.classList.add('hidden');
     els.videoRecordingIndicator.classList.add('hidden');
-    const dock = document.getElementById('mainControlsDock');
-    if (dock) { dock.style.opacity = ''; }
+    setControlDocksOpacity(null);
+    updateFloatingWindowVisibility();
 
     (window as any).umami?.track('video-mode-exit');
 }
@@ -148,6 +149,7 @@ export function exitVideoMode(): void {
 export function toggleVideoLayout(): void {
     state.videoLayoutMode = state.videoLayoutMode === 'split' ? 'overlay' : 'split';
     applyVideoLayout();
+    updateFloatingWindowVisibility();
     
     setTimeout(() => {
         scrollToCurrent();
@@ -221,8 +223,7 @@ export function startRecording(): void {
     els.videoRecordBtn.classList.add('hidden');
     els.videoStopBtn.classList.remove('hidden');
     els.videoRecordingIndicator.classList.remove('hidden');
-    const dock = document.getElementById('mainControlsDock');
-    if (dock) dock.style.opacity = (state.config.dockOpacity / 100).toString();
+    setControlDocksOpacity(state.config.dockOpacity / 100);
 
     (window as any).umami?.track('video-record-start');
 }
@@ -237,8 +238,7 @@ export function stopRecording(): void {
     els.videoRecordBtn.classList.remove('hidden');
     els.videoStopBtn.classList.add('hidden');
     els.videoRecordingIndicator.classList.add('hidden');
-    const dock = document.getElementById('mainControlsDock');
-    if (dock) { dock.style.opacity = ''; }
+    setControlDocksOpacity(null);
 
     (window as any).umami?.track('video-record-stop');
 }

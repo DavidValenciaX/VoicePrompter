@@ -5,6 +5,7 @@ export interface ScriptWord {
     word: string;
     clean: string;
     element: HTMLElement | null;
+    floatingElement: HTMLElement | null;
     skip: boolean;
     isStop: boolean;
     isBreak?: boolean;
@@ -31,6 +32,7 @@ export interface AppConfig {
     scrollingMode: ScrollingMode;
     scrollSpeed: number; // Words per second
     soundSensitivity: number; // 0 to 1
+    floatingWindowEnabled: boolean;
 }
 
 export interface AppState {

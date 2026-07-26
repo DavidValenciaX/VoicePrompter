@@ -1,12 +1,12 @@
 {
-    "name": "Voice Teleprompter",
-    "short_name": "Teleprompter",
-    "description": "A voice-activated teleprompter app",
+    "name": "VoicePrompter",
+    "short_name": "VoicePrompter",
+    "description": "A voice-activated teleprompter web app",
     "theme_color": "#000000",
     "background_color": "#000000",
     "display": "standalone",
-    "start_url": "/app/",
-    "scope": "/app/",
+    "start_url": "/",
+    "scope": "/",
     "icons": [
         {
             "src": "pwa-192x192.png",

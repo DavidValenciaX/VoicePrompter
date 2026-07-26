@@ -31,7 +31,8 @@ export const state: AppState = {
         fontFamily: 'mono', // Default font
         scrollingMode: 'voice',
         scrollSpeed: 3.5,
-        soundSensitivity: 0.75
+        soundSensitivity: 0.75,
+        floatingWindowEnabled: false
     },
     // Video recording state
     isVideoMode: false,

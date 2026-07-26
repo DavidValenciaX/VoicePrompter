@@ -1,10 +1,12 @@
 export interface Elements {
     setupScreen: HTMLElement;
     prompterContainer: HTMLElement;
+    scrollWrapper: HTMLElement;
     inputScript: HTMLTextAreaElement;
     scriptContent: HTMLElement;
     scrollContainer: HTMLElement;
     topSpacer: HTMLElement;
+    mainControlsDock: HTMLElement;
     settingsPanel: HTMLElement;
     fontSizeInput: HTMLInputElement;
     fontSizeVal: HTMLElement;
@@ -66,16 +68,13 @@ export interface Elements {
     // Language Selection
     languageSelectContainer: HTMLElement;
     languageSelectSettingsContainer: HTMLElement;
-    // Native App Promo Card
-    settingsNativeAppBanner: HTMLElement;
-    nativePromoTitle: HTMLElement;
-    nativePromoSubtitle: HTMLElement;
     // Toggles
     preserveFormattingToggle: HTMLInputElement;
     voiceCommandToggle: HTMLInputElement;
     screenRotationToggle: HTMLInputElement;
     smoothAnimationsToggle: HTMLInputElement;
     highlightActiveWordToggle: HTMLInputElement;
+    floatingWindowToggle: HTMLInputElement;
     // Font Family
     fontFamilyBtns: {
         mono: HTMLElement;
@@ -115,6 +114,19 @@ export interface Elements {
     videoDeviceSelect: HTMLSelectElement;
     audioDeviceSelect: HTMLSelectElement;
     devicesSelectionContainer: HTMLElement;
+    floatingPrompterWindow: HTMLElement;
+    floatingWindowHeader: HTMLElement;
+    floatingWindowCloseBtn: HTMLElement;
+    floatingScrollContainer: HTMLElement;
+    floatingTopSpacer: HTMLElement;
+    floatingScriptContent: HTMLElement;
+    floatingControlsDock: HTMLElement;
+    floatingResetAppBtn: HTMLElement;
+    floatingMicButton: HTMLElement;
+    floatingMicIcon: HTMLElement;
+    floatingRestartScriptBtn: HTMLElement;
+    floatingVideoModeBtn: HTMLElement;
+    floatingToggleSettingsBtn: HTMLElement;
 }
 
 export let els: Elements;
@@ -123,10 +135,12 @@ export function initElements(): void {
     els = {
         setupScreen: document.getElementById('setupScreen')!,
         prompterContainer: document.getElementById('prompterContainer')!,
+        scrollWrapper: document.getElementById('scrollWrapper')!,
         inputScript: document.getElementById('inputScript') as HTMLTextAreaElement,
         scriptContent: document.getElementById('scriptContent')!,
         scrollContainer: document.getElementById('scrollContainer')!,
         topSpacer: document.getElementById('topSpacer')!,
+        mainControlsDock: document.getElementById('mainControlsDock')!,
         settingsPanel: document.getElementById('settingsPanel')!,
         fontSizeInput: document.getElementById('fontSizeInput') as HTMLInputElement,
         fontSizeVal: document.getElementById('fontSizeVal')!,
@@ -188,16 +202,13 @@ export function initElements(): void {
         // Language Selection
         languageSelectContainer: document.getElementById('languageSelectContainer')!,
         languageSelectSettingsContainer: document.getElementById('languageSelectSettingsContainer')!,
-        // Native App Promo Card
-        settingsNativeAppBanner: document.getElementById('settings-native-app-banner')!,
-        nativePromoTitle: document.getElementById('nativePromoTitle')!,
-        nativePromoSubtitle: document.getElementById('nativePromoSubtitle')!,
         // Toggles
         preserveFormattingToggle: document.getElementById('preserveFormattingToggle') as HTMLInputElement,
         voiceCommandToggle: document.getElementById('voiceCommandToggle') as HTMLInputElement,
         screenRotationToggle: document.getElementById('screenRotationToggle') as HTMLInputElement,
         smoothAnimationsToggle: document.getElementById('smoothAnimationsToggle') as HTMLInputElement,
         highlightActiveWordToggle: document.getElementById('highlightActiveWordToggle') as HTMLInputElement,
+        floatingWindowToggle: document.getElementById('floatingWindowToggle') as HTMLInputElement,
         // Font Family
         fontFamilyBtns: {
             mono: document.getElementById('fontFamilyMonoBtn')!,
@@ -236,6 +247,19 @@ export function initElements(): void {
         copyGoogleDocUrlBtn: document.getElementById('copyGoogleDocUrlBtn')!,
         videoDeviceSelect: document.getElementById('videoDeviceSelect') as HTMLSelectElement,
         audioDeviceSelect: document.getElementById('audioDeviceSelect') as HTMLSelectElement,
-        devicesSelectionContainer: document.getElementById('devicesSelectionContainer')!
+        devicesSelectionContainer: document.getElementById('devicesSelectionContainer')!,
+        floatingPrompterWindow: document.getElementById('floatingPrompterWindow')!,
+        floatingWindowHeader: document.getElementById('floatingWindowHeader')!,
+        floatingWindowCloseBtn: document.getElementById('floatingWindowCloseBtn')!,
+        floatingScrollContainer: document.getElementById('floatingScrollContainer')!,
+        floatingTopSpacer: document.getElementById('floatingTopSpacer')!,
+        floatingScriptContent: document.getElementById('floatingScriptContent')!,
+        floatingControlsDock: document.getElementById('floatingControlsDock')!,
+        floatingResetAppBtn: document.getElementById('floatingResetAppBtn')!,
+        floatingMicButton: document.getElementById('floatingMicButton')!,
+        floatingMicIcon: document.getElementById('floatingMicIcon')!,
+        floatingRestartScriptBtn: document.getElementById('floatingRestartScriptBtn')!,
+        floatingVideoModeBtn: document.getElementById('floatingVideoModeBtn')!,
+        floatingToggleSettingsBtn: document.getElementById('floatingToggleSettingsBtn')!
     };
 }

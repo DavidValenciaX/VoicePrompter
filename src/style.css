@@ -150,6 +150,33 @@ input[type=range]::-moz-range-track {
     overflow: auto;
 }
 
+#floatingPrompterWindow {
+    contain: layout style;
+}
+
+#floatingPrompterWindow.pip-hosted {
+    position: static !important;
+    inset: auto !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    resize: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+#floatingPrompterWindow.pip-hosted #floatingWindowHeader {
+    display: none;
+}
+
+#floatingPrompterWindow.pip-hosted #floatingScrollContainer {
+    height: calc(100vh - 72px);
+}
 
 
 /* Toggle Switch Styling */

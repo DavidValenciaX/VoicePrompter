@@ -2,7 +2,7 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { initElements, els } from './elements';
 import { state } from './state';
-import { renderScript, updateHighlight, scrollToCurrent, applySettings, renderHistoryList, restartScript } from './render';
+import { renderScript, updateHighlight, scrollToCurrent, applySettings, renderHistoryList, restartScript, updateFloatingWindowVisibility, setControlDocksOpacity } from './render';
 import { initSpeech, startListening, stopListening } from './speech';
 import { autoScrollManager } from './autoscroll';
 import { saveToHistory, getHistory, clearAllHistory } from './storage';
@@ -11,9 +11,11 @@ import { enterVideoMode, exitVideoMode, toggleVideoLayout, startRecording, stopR
 import { detectAll } from 'tinyld/light';
 import { fetchGoogleDocText } from './gdoc';
 import { enumerateAndPopulateDevices } from './devices';
-import { detectVisitorPlatform, getNativePromo } from './platform-promo';
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+type DocumentPictureInPictureApi = {
+    requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
+};
 
 interface LangItem { id: string; name: string }
 
@@ -281,6 +283,7 @@ function loadScript(text: string, googleDocUrl: string | null = null): void {
                 word: '🛑',
                 clean: '',
                 element: null,
+                floatingElement: null,
                 skip: true,
                 isStop: true
             } as ScriptWord;
@@ -292,6 +295,7 @@ function loadScript(text: string, googleDocUrl: string | null = null): void {
                 word: '',
                 clean: '',
                 element: null,
+                floatingElement: null,
                 skip: true,
                 isBreak: true, // Flag to mark as line break
                 isStop: false
@@ -310,6 +314,7 @@ function loadScript(text: string, googleDocUrl: string | null = null): void {
             word: word,
             clean: cleanWord,
             element: null,
+            floatingElement: null,
             skip: shouldSkip,
             isStop: false
         } as ScriptWord;
@@ -324,9 +329,13 @@ function resetApp(): void {
     stopListening();
     autoScrollManager.stop();
     isAutoScrollStarting = false;
+    if (state.config.floatingWindowEnabled) {
+        closeFloatingWindow();
+    }
     unlockBodyScroll();
     els.prompterContainer.classList.add('hidden');
     els.setupScreen.classList.remove('hidden');
+    updateFloatingWindowVisibility();
     renderHistoryList(getHistory(), loadScript);
 }
 
@@ -389,6 +398,153 @@ function clearHistory(): void {
     if (confirm('Clear all recent scripts?')) {
         clearAllHistory();
         renderHistoryList(getHistory(), loadScript);
+    }
+}
+
+let externalFloatingWindow: Window | null = null;
+let externalFloatingWindowCloseHandler: (() => void) | null = null;
+
+function applyMirrorState(): void {
+    [els.scrollContainer, els.floatingScrollContainer].forEach((container) => {
+        container.classList.toggle('mirror-mode', state.isMirrored);
+        container.classList.toggle('mirror-mode-h', state.isMirroredH);
+    });
+}
+
+function prepareExternalWindowDocument(targetWindow: Window): void {
+    const pipDocument = targetWindow.document;
+    pipDocument.documentElement.style.width = '100%';
+    pipDocument.documentElement.style.height = '100%';
+    pipDocument.documentElement.style.setProperty('--base-color', state.config.textColor);
+    pipDocument.body.style.width = '100%';
+    pipDocument.body.style.height = '100%';
+    pipDocument.body.style.margin = '0';
+    pipDocument.body.style.overflow = 'hidden';
+    pipDocument.body.style.background = state.config.bgColor;
+    pipDocument.body.style.color = state.config.textColor;
+
+    [...document.styleSheets].forEach((styleSheet) => {
+        try {
+            const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+            const style = document.createElement('style');
+            style.textContent = cssRules;
+            pipDocument.head.appendChild(style);
+        } catch {
+            if (!styleSheet.href) return;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            if (styleSheet.type) link.type = styleSheet.type;
+            if (styleSheet.media && styleSheet.media.mediaText) link.media = styleSheet.media.mediaText;
+            link.href = styleSheet.href;
+            pipDocument.head.appendChild(link);
+        }
+    });
+
+    document.querySelectorAll('style').forEach((styleTag) => {
+        pipDocument.head.appendChild(styleTag.cloneNode(true));
+    });
+}
+
+function restoreFloatingWindowToMainDocument(): void {
+    els.floatingPrompterWindow.classList.remove('pip-hosted');
+    if (els.floatingPrompterWindow.parentElement !== els.prompterContainer) {
+        els.prompterContainer.appendChild(els.floatingPrompterWindow);
+    }
+}
+
+function handleExternalFloatingWindowClosed(): void {
+    if (externalFloatingWindow && externalFloatingWindowCloseHandler) {
+        externalFloatingWindow.removeEventListener('pagehide', externalFloatingWindowCloseHandler);
+        externalFloatingWindow.removeEventListener('beforeunload', externalFloatingWindowCloseHandler);
+    }
+    externalFloatingWindowCloseHandler = null;
+    externalFloatingWindow = null;
+    state.config.floatingWindowEnabled = false;
+    restoreFloatingWindowToMainDocument();
+    updateFloatingWindowVisibility();
+}
+
+async function openFloatingWindow(): Promise<boolean> {
+    try {
+        let nextWindow: Window | null = null;
+        const documentPictureInPictureApi = (window as Window & {
+            documentPictureInPicture?: DocumentPictureInPictureApi;
+        }).documentPictureInPicture;
+
+        if (documentPictureInPictureApi && window.self === window.top) {
+            nextWindow = await documentPictureInPictureApi.requestWindow({
+                width: 900,
+                height: 650
+            });
+        } else {
+            nextWindow = window.open('', '', 'popup=yes,width=900,height=650,left=180,top=120');
+            if (!nextWindow) {
+                throw new Error('Popup blocked');
+            }
+            nextWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                    <head>
+                        <title>VoicePrompter - PiP</title>
+                    </head>
+                    <body></body>
+                </html>
+            `);
+            nextWindow.document.close();
+        }
+
+        prepareExternalWindowDocument(nextWindow);
+        els.floatingPrompterWindow.classList.add('pip-hosted');
+        nextWindow.document.body.appendChild(els.floatingPrompterWindow);
+        applySettings();
+
+        const handleClose = () => {
+            handleExternalFloatingWindowClosed();
+        };
+
+        nextWindow.addEventListener('pagehide', handleClose);
+        nextWindow.addEventListener('beforeunload', handleClose);
+
+        externalFloatingWindow = nextWindow;
+        externalFloatingWindowCloseHandler = handleClose;
+        state.config.floatingWindowEnabled = true;
+        updateFloatingWindowVisibility();
+        requestAnimationFrame(() => scrollToCurrent());
+        nextWindow.focus();
+        return true;
+    } catch (error: any) {
+        console.error('Failed to open floating PiP window', error);
+        restoreFloatingWindowToMainDocument();
+        state.config.floatingWindowEnabled = false;
+        updateFloatingWindowVisibility();
+
+        if (error?.message === 'Popup blocked') {
+            alert('No se pudo abrir la ventana PiP porque el navegador bloqueó los popups. Permite popups para este sitio e inténtalo de nuevo.');
+        } else {
+            alert('No se pudo abrir la ventana PiP en este navegador o contexto.');
+        }
+        return false;
+    }
+}
+
+function closeFloatingWindow(): void {
+    if (externalFloatingWindow && !externalFloatingWindow.closed) {
+        externalFloatingWindow.close();
+    }
+    handleExternalFloatingWindowClosed();
+}
+
+async function setFloatingWindowEnabled(enabled: boolean): Promise<void> {
+    if (enabled) {
+        if (externalFloatingWindow && !externalFloatingWindow.closed) {
+            externalFloatingWindow.focus();
+            state.config.floatingWindowEnabled = true;
+            updateFloatingWindowVisibility();
+            return;
+        }
+        await openFloatingWindow();
+    } else {
+        closeFloatingWindow();
     }
 }
 
@@ -574,9 +730,7 @@ els.micButton.addEventListener('click', async () => {
             state.isListening = false;
             import('./render').then(({ updateMicUI }) => updateMicUI(false));
         }
-        // Restore dock opacity
-        const dock = document.getElementById('mainControlsDock');
-        if (dock) dock.style.opacity = '';
+        setControlDocksOpacity(null);
     } else {
         if (state.config.scrollingMode === 'voice') {
             (window as any).umami?.track('mic-start');
@@ -595,119 +749,36 @@ els.micButton.addEventListener('click', async () => {
             const { updateMicUI } = await import('./render');
             updateMicUI(true);
         }
-        // Fade dock while listening
-        const dock = document.getElementById('mainControlsDock');
-        if (dock) dock.style.opacity = (state.config.dockOpacity / 100).toString();
+        setControlDocksOpacity(state.config.dockOpacity / 100);
     }
 });
 
 // Reset App Button
 els.resetAppBtn.addEventListener('click', resetApp);
+els.floatingResetAppBtn.addEventListener('click', () => els.resetAppBtn.click());
 
 // Restart Script Button
 els.restartScriptBtn.addEventListener('click', restartScript);
-
-const visitorPlatform = detectVisitorPlatform();
-const nativePromo = getNativePromo(visitorPlatform);
-els.nativePromoTitle.textContent = nativePromo.title;
-
-let promoTimeout: number | null = null;
-let currentPromoPairIndex = 0;
-let currentPromoPairStatic = '';
-let currentPromoWord = '';
-
-function startPromoAnimation() {
-    if (promoTimeout) {
-        window.clearTimeout(promoTimeout);
-        promoTimeout = null;
-    }
-
-    const subtitleEl = els.nativePromoSubtitle;
-
-    const pair = nativePromo.pairs[currentPromoPairIndex];
-    currentPromoPairIndex = (currentPromoPairIndex + 1) % nativePromo.pairs.length;
-    
-    currentPromoPairStatic = pair.line1;
-
-    if (pair.rotating.length === 0) {
-        currentPromoWord = '';
-        subtitleEl.innerHTML = `<div>${pair.line1}</div><div>${pair.line2}</div>`;
-        return;
-    }
-
-    let currentIndex = 0;
-    currentPromoWord = pair.rotating[currentIndex];
-
-    subtitleEl.innerHTML = `<div>${pair.line1}</div><div class="flex items-center">${pair.line2}<span class="promo-rotating-word inline-block transition-all duration-500 opacity-100 translate-y-0 text-[#FFBB00] font-medium whitespace-nowrap ml-1">${pair.rotating[currentIndex]}</span></div>`;
-
-    const rotatingEl = subtitleEl.querySelector('.promo-rotating-word') as HTMLElement;
-
-    function animateNextWord() {
-        promoTimeout = window.setTimeout(() => {
-            if (!document.body.contains(rotatingEl)) return;
-
-            rotatingEl.classList.remove('opacity-100', 'translate-y-0');
-            rotatingEl.classList.add('opacity-0', '-translate-y-2');
-
-            promoTimeout = window.setTimeout(() => {
-                if (!document.body.contains(rotatingEl)) return;
-                currentIndex = (currentIndex + 1) % pair.rotating.length;
-                currentPromoWord = pair.rotating[currentIndex];
-                rotatingEl.textContent = pair.rotating[currentIndex];
-
-                rotatingEl.classList.remove('-translate-y-2', 'transition-all', 'duration-500');
-                rotatingEl.classList.add('translate-y-2');
-
-                void rotatingEl.offsetWidth;
-
-                rotatingEl.classList.add('transition-all', 'duration-500');
-                rotatingEl.classList.remove('opacity-0', 'translate-y-2');
-                rotatingEl.classList.add('opacity-100', 'translate-y-0');
-
-                animateNextWord();
-            }, 500);
-        }, 1500);
-    }
-
-    animateNextWord();
-}
-
-function stopPromoAnimation() {
-    if (promoTimeout) {
-        window.clearTimeout(promoTimeout);
-        promoTimeout = null;
-    }
-}
+els.floatingRestartScriptBtn.addEventListener('click', () => els.restartScriptBtn.click());
+els.floatingMicButton.addEventListener('click', () => els.micButton.click());
+els.floatingVideoModeBtn.addEventListener('click', () => els.videoModeBtn.click());
+els.floatingToggleSettingsBtn.addEventListener('click', () => els.toggleSettingsBtn.click());
+els.floatingWindowCloseBtn.addEventListener('click', () => {
+    void setFloatingWindowEnabled(false);
+});
 
 // Toggle Settings
 els.toggleSettingsBtn.addEventListener('click', () => {
     (window as any).umami?.track('settings-toggle');
     const isHidden = els.settingsPanel.classList.toggle('hidden');
-    if (!isHidden) {
-        startPromoAnimation();
-        if (!isIOS) {
-            enumerateAndPopulateDevices(false);
-        }
-    } else {
-        stopPromoAnimation();
+    if (!isHidden && !isIOS) {
+        enumerateAndPopulateDevices(false);
     }
 });
 
 // Close Settings
 els.closeSettingsBtn.addEventListener('click', () => {
     els.settingsPanel.classList.add('hidden');
-    stopPromoAnimation();
-});
-
-// Native App Promo Card Banner
-els.settingsNativeAppBanner.addEventListener('click', () => {
-    const promoData = currentPromoWord ? `${currentPromoPairStatic} - ${currentPromoWord}` : currentPromoPairStatic;
-    (window as any).umami?.track(nativePromo.analyticsEvent, {
-        destination: nativePromo.href,
-        sourcePlatform: visitorPlatform,
-        variant: promoData
-    });
-    window.location.href = nativePromo.href;
 });
 
 // Font Size Slider
@@ -715,7 +786,7 @@ els.fontSizeInput.addEventListener('input', (e) => {
     const val = parseInt((e.target as HTMLInputElement).value);
     state.config.fontSize = val;
     els.fontSizeVal.textContent = `${val}px`;
-    els.scriptContent.style.fontSize = `${val}px`;
+    applySettings();
 });
 
 // Line Height Slider
@@ -723,7 +794,7 @@ els.lineHeightInput.addEventListener('input', (e) => {
     const val = parseFloat((e.target as HTMLInputElement).value);
     state.config.lineHeight = val;
     els.lineHeightVal.textContent = `${val}x`;
-    els.scriptContent.style.lineHeight = `${val}`;
+    applySettings();
 });
 
 // Paragraph Spacing Slider
@@ -739,8 +810,7 @@ els.marginInput.addEventListener('input', (e) => {
     const val = parseInt((e.target as HTMLInputElement).value);
     state.config.margin = val;
     els.marginVal.textContent = `${val}%`;
-    els.scriptContent.style.paddingLeft = `${val}%`;
-    els.scriptContent.style.paddingRight = `${val}%`;
+    applySettings();
 });
 
 // Dock Opacity Slider
@@ -748,10 +818,8 @@ els.dockOpacityInput.addEventListener('input', (e) => {
     const val = parseInt((e.target as HTMLInputElement).value);
     state.config.dockOpacity = val;
     els.dockOpacityVal.textContent = `${val}%`;
-    // Apply live preview if the dock is currently faded (mic listening or recording)
     if (state.isListening || state.isRecording) {
-        const dock = document.getElementById('mainControlsDock');
-        if (dock) dock.style.opacity = (val / 100).toString();
+        setControlDocksOpacity(val / 100);
     }
 });
 
@@ -791,7 +859,7 @@ els.bgColorInput.addEventListener('input', (e) => {
 (['left', 'center', 'right'] as const).forEach(align => {
     els.alignBtns[align].addEventListener('click', () => {
         state.config.textAlign = align;
-        els.scriptContent.style.textAlign = align;
+        applySettings();
         updateAlignmentButtons();
     });
 });
@@ -825,33 +893,23 @@ els.themeLightBtn.addEventListener('click', () => {
 // Mirror Toggle
 els.mirrorToggle.addEventListener('change', (e) => {
     state.isMirrored = (e.target as HTMLInputElement).checked;
-
-    if (state.isMirrored) {
-        els.scrollContainer.classList.add('mirror-mode');
-    } else {
-        els.scrollContainer.classList.remove('mirror-mode');
-    }
+    applyMirrorState();
 });
 
 // Horizontal Mirror Toggle (beta, revealed via ?beta=hmirror)
 els.hMirrorToggle.addEventListener('change', (e) => {
     state.isMirroredH = (e.target as HTMLInputElement).checked;
-
-    if (state.isMirroredH) {
-        els.scrollContainer.classList.add('mirror-mode-h');
-    } else {
-        els.scrollContainer.classList.remove('mirror-mode-h');
-    }
+    applyMirrorState();
 });
 
 // Stop Sign Toggle
 els.stopSignToggle.addEventListener('change', (e) => {
     state.config.showStopIcon = (e.target as HTMLInputElement).checked;
-    if (state.config.showStopIcon) {
-        els.scriptContent.classList.add('show-stops');
-    } else {
-        els.scriptContent.classList.remove('show-stops');
-    }
+    applySettings();
+});
+
+els.floatingWindowToggle.addEventListener('change', (e) => {
+    void setFloatingWindowEnabled((e.target as HTMLInputElement).checked);
 });
 
 function handleLanguageChange(lang: string) {
@@ -1048,6 +1106,8 @@ function initializeUI(): void {
 
     els.smoothAnimationsToggle.checked = state.config.smoothAnimations;
     els.highlightActiveWordToggle.checked = state.config.highlightActiveWord;
+    els.floatingWindowToggle.checked = state.config.floatingWindowEnabled;
+    applyMirrorState();
 
     // Seed demo script for first-time users
     const history = getHistory();
@@ -1221,15 +1281,7 @@ function updateScrollingUI() {
     els.scrollingModeDescription.textContent = descriptions[state.config.scrollingMode];
 
     // Update Mic button icon based on mode
-    const path = els.micButton.querySelector('path');
-    if (path) {
-        if (state.config.scrollingMode === 'voice') {
-            path.setAttribute('d', 'M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z');
-        } else {
-            // Play icon
-            path.setAttribute('d', 'M8 5v14l11-7z');
-        }
-    }
+    import('./render').then(({ updateMicUI }) => updateMicUI(state.isListening));
 }
 
 els.scrollingModeSelect.addEventListener('change', (e) => {
