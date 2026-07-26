@@ -64,7 +64,6 @@ export async function enterVideoMode(): Promise<void> {
             els.androidVideoWarning.classList.remove('hidden');
         }
 
-        (window as any).umami?.track('video-mode-enter');
     } catch (err) {
         console.error('Failed to access camera:', err);
         alert('Could not access your camera. Please allow camera and microphone permissions.');
@@ -96,7 +95,6 @@ export async function flipCamera(): Promise<void> {
         applyCameraMirror();
         await els.videoPreview.play();
 
-        (window as any).umami?.track('video-flip-camera', { facing: state.facingMode });
     } catch (err) {
         // Device may not have the requested camera — revert.
         console.error('Failed to switch camera:', err);
@@ -143,7 +141,6 @@ export function exitVideoMode(): void {
     setControlDocksOpacity(null);
     updateFloatingWindowVisibility();
 
-    (window as any).umami?.track('video-mode-exit');
 }
 
 export function toggleVideoLayout(): void {
@@ -155,7 +152,6 @@ export function toggleVideoLayout(): void {
         scrollToCurrent();
     }, 50);
 
-    (window as any).umami?.track('video-layout-toggle', { layout: state.videoLayoutMode });
 }
 
 function applyVideoLayout(): void {
@@ -225,7 +221,6 @@ export function startRecording(): void {
     els.videoRecordingIndicator.classList.remove('hidden');
     setControlDocksOpacity(state.config.dockOpacity / 100);
 
-    (window as any).umami?.track('video-record-start');
 }
 
 export function stopRecording(): void {
@@ -240,7 +235,6 @@ export function stopRecording(): void {
     els.videoRecordingIndicator.classList.add('hidden');
     setControlDocksOpacity(null);
 
-    (window as any).umami?.track('video-record-stop');
 }
 
 function downloadRecording(): void {

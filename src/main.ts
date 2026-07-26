@@ -566,13 +566,11 @@ async function setFloatingWindowEnabled(enabled: boolean): Promise<void> {
 
 // Load Script Button
 els.loadScriptBtn.addEventListener('click', () => {
-    (window as any).umami?.track('start-teleprompter');
     loadScript(els.inputScript.value);
 });
 
 // Clear Script Button
 els.clearScriptBtn.addEventListener('click', () => {
-    (window as any).umami?.track('clear-script');
     els.inputScript.value = '';
     els.inputScript.focus();
 });
@@ -581,7 +579,6 @@ els.clearScriptBtn.addEventListener('click', () => {
 els.copyScriptBtn.addEventListener('click', async () => {
     const text = els.inputScript.value;
     if (!text) return;
-    (window as any).umami?.track('copy-script');
     try {
         await navigator.clipboard.writeText(text);
         const originalText = els.copyScriptBtn.textContent;
@@ -593,7 +590,6 @@ els.copyScriptBtn.addEventListener('click', async () => {
 
 // Paste Script Button
 els.pasteScriptBtn.addEventListener('click', async () => {
-    (window as any).umami?.track('paste-script');
     try {
         const text = await navigator.clipboard.readText();
         els.inputScript.value = text;
@@ -607,7 +603,6 @@ els.pasteScriptBtn.addEventListener('click', async () => {
 
 // Show Import Modal
 els.importGoogleDocBtn.addEventListener('click', () => {
-    (window as any).umami?.track('open-google-doc-modal');
     els.googleDocUrlInput.value = '';
     els.googleDocModal.classList.remove('hidden');
     els.googleDocUrlInput.focus();
@@ -620,7 +615,6 @@ els.closeGoogleDocModalBtn.addEventListener('click', () => {
 
 // Paste Google Doc Link Button
 els.pasteGoogleDocUrlBtn.addEventListener('click', async () => {
-    (window as any).umami?.track('paste-google-doc-url');
     try {
         const text = await navigator.clipboard.readText();
         els.googleDocUrlInput.value = text.trim();
@@ -645,7 +639,6 @@ els.confirmGoogleDocImportBtn.addEventListener('click', async () => {
 
     try {
         const text = await fetchGoogleDocText(url);
-        (window as any).umami?.track('import-google-doc-success');
         
         els.inputScript.value = text;
         els.googleDocModal.classList.add('hidden');
@@ -653,7 +646,6 @@ els.confirmGoogleDocImportBtn.addEventListener('click', async () => {
         // Load script and pass the URL to state/history
         loadScript(text, url);
     } catch (err: any) {
-        (window as any).umami?.track('import-google-doc-error', { error: err.message });
         alert(err.message || 'Failed to import document.');
     } finally {
         btn.disabled = false;
@@ -666,7 +658,6 @@ els.refreshGoogleDocBtn.addEventListener('click', async () => {
     const url = state.googleDocUrl;
     if (!url) return;
 
-    (window as any).umami?.track('refresh-google-doc-click');
     const btn = els.refreshGoogleDocBtn as HTMLButtonElement;
     const originalText = btn.innerHTML;
     btn.disabled = true;
@@ -674,7 +665,6 @@ els.refreshGoogleDocBtn.addEventListener('click', async () => {
 
     try {
         const text = await fetchGoogleDocText(url);
-        (window as any).umami?.track('refresh-google-doc-success');
 
         els.inputScript.value = text;
 
@@ -696,7 +686,6 @@ els.refreshGoogleDocBtn.addEventListener('click', async () => {
             btn.innerHTML = originalText;
         }, 1500);
     } catch (err: any) {
-        (window as any).umami?.track('refresh-google-doc-error', { error: err.message });
         alert(err.message || 'Failed to refresh document.');
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -708,7 +697,6 @@ els.copyGoogleDocUrlBtn.addEventListener('click', async () => {
     const url = state.googleDocUrl;
     if (!url) return;
 
-    (window as any).umami?.track('copy-google-doc-url-click');
     try {
         await navigator.clipboard.writeText(url);
         
@@ -737,7 +725,6 @@ els.micButton.addEventListener('click', async () => {
 
     if (state.isListening) {
         if (state.config.scrollingMode === 'voice') {
-            (window as any).umami?.track('mic-stop');
             stopListening();
         } else {
             autoScrollManager.stop();
@@ -747,7 +734,6 @@ els.micButton.addEventListener('click', async () => {
         setControlDocksOpacity(null);
     } else {
         if (state.config.scrollingMode === 'voice') {
-            (window as any).umami?.track('mic-start');
             startListening();
         } else {
             isAutoScrollStarting = true;
@@ -783,7 +769,6 @@ els.floatingWindowCloseBtn.addEventListener('click', () => {
 
 // Toggle Settings
 els.toggleSettingsBtn.addEventListener('click', () => {
-    (window as any).umami?.track('settings-toggle');
     const isHidden = els.settingsPanel.classList.toggle('hidden');
     if (!isHidden && !isIOS) {
         enumerateAndPopulateDevices(false);
@@ -927,7 +912,6 @@ els.floatingWindowToggle.addEventListener('change', (e) => {
 });
 
 function handleLanguageChange(lang: string) {
-    (window as any).umami?.track('language-select', { language: lang });
     state.languageSetting = lang;
 
     // if auto, re-detect if there is a script
