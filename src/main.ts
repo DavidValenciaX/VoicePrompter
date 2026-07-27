@@ -404,6 +404,7 @@ function resetApp(): void {
     stopListening();
     autoScrollManager.stop();
     isAutoScrollStarting = false;
+    void setFullscreenEnabled(false);
     if (state.config.floatingWindowEnabled) {
         closeFloatingWindow();
     }
