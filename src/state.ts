@@ -25,7 +25,7 @@ export const state: AppState = {
         paragraphSpacing: 0.5,
         smoothAnimations: false,
         highlightActiveWord: true,
-        activeLinePosition: 35, // Default to 35% from top
+        activeLinePosition: 10, // Default to 10% from top
         lookaheadWords: 3, // Default lookahead
         dockOpacity: 50, // Default dock opacity (50%)
         fontFamily: 'mono', // Default font
