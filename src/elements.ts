@@ -72,6 +72,7 @@ export interface Elements {
     preserveFormattingToggle: HTMLInputElement;
     voiceCommandToggle: HTMLInputElement;
     screenRotationToggle: HTMLInputElement;
+    fullscreenToggle: HTMLInputElement;
     smoothAnimationsToggle: HTMLInputElement;
     highlightActiveWordToggle: HTMLInputElement;
     floatingWindowToggle: HTMLInputElement;
@@ -206,6 +207,7 @@ export function initElements(): void {
         preserveFormattingToggle: document.getElementById('preserveFormattingToggle') as HTMLInputElement,
         voiceCommandToggle: document.getElementById('voiceCommandToggle') as HTMLInputElement,
         screenRotationToggle: document.getElementById('screenRotationToggle') as HTMLInputElement,
+        fullscreenToggle: document.getElementById('fullscreenToggle') as HTMLInputElement,
         smoothAnimationsToggle: document.getElementById('smoothAnimationsToggle') as HTMLInputElement,
         highlightActiveWordToggle: document.getElementById('highlightActiveWordToggle') as HTMLInputElement,
         floatingWindowToggle: document.getElementById('floatingWindowToggle') as HTMLInputElement,

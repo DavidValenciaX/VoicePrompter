@@ -16,8 +16,70 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platfor
 type DocumentPictureInPictureApi = {
     requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
 };
+type WebkitFullscreenDocument = Document & {
+    webkitFullscreenElement?: Element | null;
+    webkitExitFullscreen?: () => Promise<void> | void;
+};
+type FullscreenCapableElement = HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+};
 
 interface LangItem { id: string; name: string }
+
+function getFullscreenDocument(): WebkitFullscreenDocument {
+    return document as WebkitFullscreenDocument;
+}
+
+function isFullscreenActive(): boolean {
+    const webkitDocument = getFullscreenDocument();
+    return Boolean(document.fullscreenElement || webkitDocument.webkitFullscreenElement);
+}
+
+function syncFullscreenToggle(): void {
+    els.fullscreenToggle.checked = isFullscreenActive();
+}
+
+async function setFullscreenEnabled(enabled: boolean): Promise<void> {
+    const root = document.documentElement as FullscreenCapableElement;
+    const webkitDocument = getFullscreenDocument();
+
+    try {
+        if (enabled) {
+            if (isFullscreenActive()) {
+                syncFullscreenToggle();
+                return;
+            }
+
+            if (typeof root.requestFullscreen === 'function') {
+                await root.requestFullscreen();
+            } else if (typeof root.webkitRequestFullscreen === 'function') {
+                await root.webkitRequestFullscreen();
+            } else {
+                els.fullscreenToggle.checked = false;
+                alert('No se pudo activar la pantalla completa en este navegador.');
+                return;
+            }
+        } else {
+            if (!isFullscreenActive()) {
+                syncFullscreenToggle();
+                return;
+            }
+
+            if (typeof document.exitFullscreen === 'function') {
+                await document.exitFullscreen();
+            } else if (typeof webkitDocument.webkitExitFullscreen === 'function') {
+                await webkitDocument.webkitExitFullscreen();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to toggle fullscreen mode', error);
+        alert(enabled
+            ? 'No se pudo activar la pantalla completa en este navegador o contexto.'
+            : 'No se pudo salir de la pantalla completa.');
+    } finally {
+        syncFullscreenToggle();
+    }
+}
 
 function revealStartupOverlay(): void {
     const revealApp = (window as Window & { revealApp?: () => void }).revealApp;
@@ -226,6 +288,8 @@ registerSW({ immediate: true });
 initElements();
 initSpeech();
 renderLanguageDropdowns();
+document.addEventListener('fullscreenchange', syncFullscreenToggle);
+document.addEventListener('webkitfullscreenchange', syncFullscreenToggle);
 
 // --- Toast ---
 let langWarningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -983,6 +1047,11 @@ els.screenRotationToggle.addEventListener('change', (e) => {
     pinDockToVisualViewport();
 });
 
+// Full Screen Toggle
+els.fullscreenToggle.addEventListener('change', (e) => {
+    void setFullscreenEnabled((e.target as HTMLInputElement).checked);
+});
+
 // Smooth Animations Toggle
 els.smoothAnimationsToggle.addEventListener('change', (e) => {
     state.config.smoothAnimations = (e.target as HTMLInputElement).checked;
@@ -1105,6 +1174,7 @@ function initializeUI(): void {
     els.smoothAnimationsToggle.checked = state.config.smoothAnimations;
     els.highlightActiveWordToggle.checked = state.config.highlightActiveWord;
     els.floatingWindowToggle.checked = state.config.floatingWindowEnabled;
+    syncFullscreenToggle();
     applyMirrorState();
 
     // Seed demo script for first-time users
