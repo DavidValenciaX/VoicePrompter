@@ -14,7 +14,7 @@ export const state: AppState = {
     config: {
         fontSize: 40,
         lineHeight: 1.0,
-        margin: 0,
+        margin: 16,
         textColor: '#ffffff',
         bgColor: '#000000',
         textAlign: 'left',
@@ -25,7 +25,7 @@ export const state: AppState = {
         paragraphSpacing: 0.5,
         smoothAnimations: false,
         highlightActiveWord: true,
-        activeLinePosition: 10, // Default to 10% from top
+        activeLinePosition: 0, // Default to 0% from top
         lookaheadWords: 3, // Default lookahead
         dockOpacity: 50, // Default dock opacity (50%)
         fontFamily: 'mono', // Default font
