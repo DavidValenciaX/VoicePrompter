@@ -630,7 +630,11 @@ async function setFloatingWindowEnabled(enabled: boolean): Promise<void> {
 
 // Load Script Button
 els.loadScriptBtn.addEventListener('click', () => {
-    loadScript(els.inputScript.value);
+    const scriptText = els.inputScript.value.trim();
+    if (!scriptText) return;
+
+    loadScript(scriptText);
+    void setFullscreenEnabled(true);
 });
 
 // Clear Script Button
