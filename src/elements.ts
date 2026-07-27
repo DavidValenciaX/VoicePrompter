@@ -8,6 +8,8 @@ export interface Elements {
     topSpacer: HTMLElement;
     mainControlsDock: HTMLElement;
     settingsPanel: HTMLElement;
+    activeLinePositionInput: HTMLInputElement;
+    activeLinePositionVal: HTMLElement;
     fontSizeInput: HTMLInputElement;
     fontSizeVal: HTMLElement;
     lineHeightInput: HTMLInputElement;
@@ -18,8 +20,6 @@ export interface Elements {
     marginVal: HTMLElement;
     dockOpacityInput: HTMLInputElement;
     dockOpacityVal: HTMLElement;
-    activeLinePositionInput: HTMLInputElement;
-    activeLinePositionVal: HTMLElement;
     lookaheadWordsInput: HTMLInputElement;
     lookaheadWordsVal: HTMLElement;
     textColorInput: HTMLInputElement;
@@ -142,6 +142,8 @@ export function initElements(): void {
         topSpacer: document.getElementById('topSpacer')!,
         mainControlsDock: document.getElementById('mainControlsDock')!,
         settingsPanel: document.getElementById('settingsPanel')!,
+        activeLinePositionInput: document.getElementById('activeLinePositionInput') as HTMLInputElement,
+        activeLinePositionVal: document.getElementById('activeLinePositionVal')!,
         fontSizeInput: document.getElementById('fontSizeInput') as HTMLInputElement,
         fontSizeVal: document.getElementById('fontSizeVal')!,
         lineHeightInput: document.getElementById('lineHeightInput') as HTMLInputElement,
@@ -152,8 +154,6 @@ export function initElements(): void {
         marginVal: document.getElementById('marginVal')!,
         dockOpacityInput: document.getElementById('dockOpacityInput') as HTMLInputElement,
         dockOpacityVal: document.getElementById('dockOpacityVal')!,
-        activeLinePositionInput: document.getElementById('activeLinePositionInput') as HTMLInputElement,
-        activeLinePositionVal: document.getElementById('activeLinePositionVal')!,
         lookaheadWordsInput: document.getElementById('lookaheadWordsInput') as HTMLInputElement,
         lookaheadWordsVal: document.getElementById('lookaheadWordsVal')!,
         textColorInput: document.getElementById('textColorInput') as HTMLInputElement,

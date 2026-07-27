@@ -780,6 +780,19 @@ els.closeSettingsBtn.addEventListener('click', () => {
     els.settingsPanel.classList.add('hidden');
 });
 
+// Active Line Position Slider
+els.activeLinePositionInput.addEventListener('input', (e) => {
+    const val = parseInt((e.target as HTMLInputElement).value);
+    state.config.activeLinePosition = val;
+    els.activeLinePositionVal.textContent = `${val}%`;
+
+    // Update spacer to allow scrolling to the bottom-most position
+    // If position is 90% (bottom), we need less spacer at top but more at bottom?
+    // Actually, scrollToCurrent handles the positioning logic.
+    // We just need to trigger a scroll update.
+    scrollToCurrent();
+});
+
 // Font Size Slider
 els.fontSizeInput.addEventListener('input', (e) => {
     const val = parseInt((e.target as HTMLInputElement).value);
@@ -820,19 +833,6 @@ els.dockOpacityInput.addEventListener('input', (e) => {
     if (state.isListening || state.isRecording) {
         setControlDocksOpacity(val / 100);
     }
-});
-
-// Active Line Position Slider
-els.activeLinePositionInput.addEventListener('input', (e) => {
-    const val = parseInt((e.target as HTMLInputElement).value);
-    state.config.activeLinePosition = val;
-    els.activeLinePositionVal.textContent = `${val}%`;
-
-    // Update spacer to allow scrolling to the bottom-most position
-    // If position is 90% (bottom), we need less spacer at top but more at bottom?
-    // Actually, scrollToCurrent handles the positioning logic.
-    // We just need to trigger a scroll update.
-    scrollToCurrent();
 });
 
 // Lookahead Words Slider
@@ -1076,6 +1076,9 @@ function initializeUI(): void {
     }
 
     // Set UI values from state
+    els.activeLinePositionVal.textContent = `${state.config.activeLinePosition}%`;
+    els.activeLinePositionInput.value = state.config.activeLinePosition.toString();
+
     els.fontSizeVal.textContent = `${state.config.fontSize}px`;
     els.fontSizeInput.value = state.config.fontSize.toString();
 
@@ -1091,9 +1094,6 @@ function initializeUI(): void {
 
     els.dockOpacityVal.textContent = `${state.config.dockOpacity}%`;
     els.dockOpacityInput.value = state.config.dockOpacity.toString();
-
-    els.activeLinePositionVal.textContent = `${state.config.activeLinePosition}%`;
-    els.activeLinePositionInput.value = state.config.activeLinePosition.toString();
 
     els.lookaheadWordsVal.textContent = `${state.config.lookaheadWords}`;
     els.lookaheadWordsInput.value = state.config.lookaheadWords.toString();
